@@ -1,4 +1,4 @@
-float new_valor=0;
+float new_valor = 0;
 ////////////////////////////////////
 //INTERRUPCAO
 ISR(INT1_vect){
@@ -8,7 +8,6 @@ new_valor += (25.5); // soma 10% do valor de 255
 
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 char RX_buffer[32]; // Variáveis para entrada e saída
 char RX_index = 0; // Variáveis para entrada e saída
@@ -50,34 +49,20 @@ void limpa_RX_buffer(void) // Limpa o buffer de entrada e saída
     }
 }
 
-ISR(USART_RX_vect) // Função ISR que salva um array de dados recebidos via UART
-
-    RX_buffer[RX_index] = UDR0; // Salva o dado recebido
+ISR(USART_RX_vect)
+{
+    // Salva o dado recebido
+    RX_buffer[RX_index] = UDR0;
     RX_buffer[RX_index +1] = 0;
-    RX_index++; // Adiciona mais 1 na contagem
-
-int i = RX_index;
-
-if(RX_buffer[i-3]== 'O' && RX_buffer[i-2]== 'F' && RX_buffer[i-1]== 'F'){
-Serial.println('Desligado')
-limpa_RX_buffer(void);
-}else
-if((RX_buffer[i-2]== 'O' && RX_buffer[i-1]== 'N')){
-serial.println('ligado');
-limpa_RX_buffer(void);
-}
+    // Adiciona mais 1 na contagem
+    RX_index++;
 }
 
-}
 /////////////////////////////////////////////////////////////////////////////////
 void ADC_init () {
 
 ADMUX |= (1 << REFS0); // Configura Vref para VCC = 5V
-// ADC ativado e preescaler de 128
-  //      16MHz / 128 = 125kHz
-   // ADEN = ADC Enable, ativa o ADC
-   // ADPSx = ADC Prescaler Select Bits
-   //     1 1 1 = clock / 128 
+
 ADCSRA |= (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 }
 
@@ -96,27 +81,51 @@ return valor >> 3;// Retorna a média de 8 leituras
 }
 
 int main (){
-
 //////////////////
-DDRD |= 0b01000000; // PD6 saída PWM (LED vermelho)
+DDRD |= 0b01100000; // PD6 saída PWM (LED vermelho)// PD5 saida GPIO(LED Verde)
 PORTD |= 0b00001000; // PD2 em pull-up
 EIMSK |= (0b00000010); // Habilita a interrupção no PD2
 EICRA |= (0b00001101); // Transição de subida
 TCCR0A |= (1 << COM0A1) | (1 << WGM01) | (1 << WGM00); // Modo não-invertido e modo Fast-PWM
 TCCR0B |= (1<<CS02)|(1<<CS00);
 sei();
-
+bool SystemStatus=0 ;
+UART_init(9600);
 ///////////////////////////
 ADC_init (); // Inicializa o ADC
-Serial.begin (9600); // Inicializa a porta serial
+//Serial.begin (9600); // Inicializa a porta serial
 float valorTemp=0;
-////////////////////////////
-  
+//////////////////////////// 
 while(1){
+  int i = RX_index;
+ char vetor[32];
+if(RX_buffer[i-3]== 'o' && RX_buffer[i-2]== 'f' && RX_buffer[i-1]== 'f'){ 
+UART_send(RX_buffer);
+PORTD|=(0<<PD5);
+SystemStatus=0;
+limpa_RX_buffer();
+}else
+if((RX_buffer[i-2]== 'o' && RX_buffer[i-1]== 'n')){
+UART_send(RX_buffer);
+PORTD|=(1<<PD5);
+SystemStatus=1;
+limpa_RX_buffer();
+}
+if(SystemStatus==1){
 OCR0A = new_valor;
 int valor = ADC_read (PC0);
 valorTemp =valor*(50.0/1023.0)+20;
-Serial.print ("Temperatura: ");// Imprime o valor
-Serial.println (valorTemp);
+UART_send("Temperatura: ");// Imprime o valor
+itoa(valorTemp,vetor,10);
+UART_send(vetor);
+UART_send(" °C");
+_delay_ms(1000);
 }
+else{
+ ADCSRA |= ( 0<< ADEN) ; // DESLIGA CONVERSOR AD
+ EIMSK |= (0b00000000); //DESLIGA INTERRUPÇAO
+ PORTD |= (0<<PD6)|(0<<PD5); //DESLIGA LEDS DE PWM E INDICAÇÃO
+}
+  }
+  
 }
